@@ -1,0 +1,50 @@
+name: Build HiGHS
+
+on:
+  push:
+    branches: [ci/build-highs]
+  workflow_dispatch:
+
+jobs:
+  build:
+    name: ${{ matrix.platform }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-22.04
+            platform: linux_amd64
+            container: --docker
+          - os: ubuntu-24.04-arm
+            platform: linux_arm64
+            container: --docker
+          - os: macos-15
+            platform: darwin_arm64
+            container: ""
+          - os: macos-15-intel
+            platform: darwin_amd64
+            container: ""
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build HiGHS v1.15.1
+        run: ./scripts/build-highs.sh --platform ${{ matrix.platform }} --tag v1.15.1 ${{ matrix.container }}
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+
+      - name: Install host test deps (Linux)
+        if: runner.os == 'Linux'
+        run: sudo apt-get update && sudo apt-get install -y g++ zlib1g-dev
+
+      - name: Test package
+        run: go test ./highs/
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: highs-${{ matrix.platform }}
+          path: |
+            internal/highs/lib/${{ matrix.platform }}/libhighs.a
+            internal/highs/include/
